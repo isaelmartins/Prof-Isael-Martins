@@ -208,11 +208,14 @@ export default function App() {
     }
 
     Tone.Transport.cancel();
+    Tone.Transport.seconds = 0;
     
     const totalMeasures = songStructure.length;
+    if (totalMeasures === 0) return;
     
     songStructure.forEach((chordName, mIndex) => {
-      RHYTHM_PATTERNS[selectedRhythm].forEach((item, rIndex) => {
+      const rhythm = RHYTHM_PATTERNS[selectedRhythm];
+      rhythm.forEach((item, rIndex) => {
         const bars = mIndex;
         const beats = Math.floor(item.time);
         const sixteenths = (item.time % 1) * 4;
@@ -225,9 +228,9 @@ export default function App() {
             const notesToPlay = isDown ? chordNotes : [...chordNotes].reverse();
             
             notesToPlay.forEach((note, i) => {
-              const strumOffset = i * 0.02;
+              const strumOffset = i * 0.015; // Slightly faster strum for better feel
               const velocity = isDown ? 0.85 - (i * 0.04) : 0.65 - (i * 0.04);
-              const humanize = (Math.random() - 0.5) * 0.005;
+              const humanize = (Math.random() - 0.5) * 0.004;
               
               samplerRef.current?.triggerAttackRelease(
                 note, 
@@ -239,30 +242,34 @@ export default function App() {
           }
           
           Tone.Draw.schedule(() => {
-            setCurrentMeasureIndex(mIndex);
             setActiveArrowIndex(rIndex);
-            vibrateStrings(item.direction as 'down' | 'up', chordName);
-            setTimeout(() => setActiveArrowIndex(-1), 150);
+            // No need to set currentMeasureIndex here, the repeat handles it more smoothly
           }, time);
+
+          // Clear the highlight after a duration relative to the tempo
+          const highlightDuration = (60 / Tone.Transport.bpm.value) * 0.15;
+          Tone.Draw.schedule(() => {
+            setActiveArrowIndex(prev => prev === rIndex ? -1 : prev);
+          }, time + highlightDuration);
         }, timeStr);
       });
     });
 
-    // Progress tracking for cursor
+    // High-precision progress tracking
     Tone.Transport.scheduleRepeat((time) => {
-      const seconds = Tone.Transport.seconds;
-      const bpm = Tone.Transport.bpm.value;
-      const secondsPerMeasure = (60 / bpm) * 4;
-      const currentM = Math.floor(seconds / secondsPerMeasure) % totalMeasures;
-      const progress = (seconds % secondsPerMeasure) / secondsPerMeasure;
+      const progress = Tone.Transport.progress;
+      const exactMeasure = progress * totalMeasures;
+      const currentM = Math.floor(exactMeasure);
+      const mProgress = exactMeasure % 1;
       
       Tone.Draw.schedule(() => {
-        setPlaybackProgress(progress);
+        setPlaybackProgress(mProgress);
         setCurrentMeasureIndex(currentM);
       }, time);
-    }, "32n");
+    }, "64n"); // Higher resolution for smoother cursor
 
     Tone.Transport.loop = true;
+    Tone.Transport.loopStart = 0;
     Tone.Transport.loopEnd = `${totalMeasures}m`;
     Tone.Transport.start();
     setIsPlaying(true);
@@ -270,8 +277,11 @@ export default function App() {
 
   const stopPlayback = () => {
     Tone.Transport.stop();
+    Tone.Transport.cancel(); // Clear all scheduled events
     setIsPlaying(false);
     setActiveArrowIndex(-1);
+    setPlaybackProgress(0);
+    setCurrentMeasureIndex(0);
   };
 
   const togglePlayback = () => {
@@ -309,15 +319,10 @@ export default function App() {
               </div>
             </div>
             <div className="flex flex-col">
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em] mb-1">Desenvolvido por:</span>
               <h2 className="text-2xl font-black tracking-tighter text-white uppercase italic leading-none">
                 Professor <span className="text-amber-500">Isael Martins</span>
               </h2>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Criado por:</span>
-                <div className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
-                  <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em]">minha logo</span>
-                </div>
-              </div>
             </div>
           </div>
           
@@ -747,13 +752,11 @@ export default function App() {
           <div className="text-[8px] font-black text-zinc-700 uppercase tracking-[0.5em]">
             SERIAL NO: RL-2026-G-MAJ
           </div>
-          <div className="text-[9px] font-black text-zinc-500 uppercase tracking-[0.2em]">
-            Criado por: <span className="text-amber-500">minha logo</span>
-          </div>
         </div>
         
         <div className="flex items-center gap-4">
           <div className="text-right">
+            <p className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Desenvolvido por:</p>
             <p className="text-[10px] font-black text-white uppercase tracking-widest">Professor Isael Martins</p>
             <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">© 2026 All Rights Reserved</p>
           </div>
